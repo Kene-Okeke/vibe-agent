@@ -16,7 +16,7 @@ with zipfile.ZipFile("escape.zip", "w") as z:
 
 with zipfile.ZipFile("monorepo.zip", "w") as z:
     z.writestr("my-project/package.json", json.dumps({"name": "my-project", "workspaces": ["apps/*", "packages/*"]}))
-    z.writestr("my-project/apps/frontend/package.json", json.dumps({"name": "frontend", "scripts": {"build": "vite build"}}))
+    z.writestr("my-project/apps/frontend/package.json", json.dumps({"name": "frontend", "dependencies": {"react": "18", "shared": "*"}, "scripts": {"build": "vite build"}}))
     z.writestr("my-project/apps/frontend/index.html", "<div id=root></div>")
     z.writestr("my-project/apps/backend/requirements.txt", "fastapi\n")
     z.writestr("my-project/apps/backend/main.py", "")
@@ -25,5 +25,11 @@ with zipfile.ZipFile("monorepo.zip", "w") as z:
 with zipfile.ZipFile("broken-json.zip", "w") as z:
     z.writestr("site/package.json", "{ not json")
     z.writestr("site/index.html", "<h1>hi</h1>")
+
+    
+
+with zipfile.ZipFile("two-sites.zip", "w") as z:
+    z.writestr("shop/package.json", json.dumps({"name": "shop", "dependencies": {"react": "18"}}))
+    z.writestr("admin/package.json", json.dumps({"name": "admin", "dependencies": {"react": "18"}}))
 
 print("made good.zip, too-many.zip, too-big.zip, escape.zip")

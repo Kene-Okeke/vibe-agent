@@ -1,4 +1,4 @@
-from app.inspector import find_apps, add_package_managers
+from vibe_agent.inspector.inspector import find_apps, add_package_managers
 
 samples = {
     "npm app": ["shop/package.json", "shop/package-lock.json"],

@@ -218,7 +218,7 @@ def find_libraries(path: str, names: list[str]):
             
             uses=[]
             
-            if data["dependencies"] in data:
+            if "dependencies" in data:
                 for dependency in data["dependencies"]:
                     uses.append(dependency)
             if "devDependencies" in data:

@@ -1,4 +1,4 @@
-from app.inspector import find_apps
+from vibe_agent.inspector.inspector import find_apps
 
 samples = {
     "static site": ["index.html", "style.css", "img/logo.png"],

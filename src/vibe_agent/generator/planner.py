@@ -121,8 +121,7 @@ def detect_package_manager(manifest:Manifest) -> str | None:
     if manifest.lockfile in LOCKFILE_TO_MANAGER:
         return LOCKFILE_TO_MANAGER[manifest.lockfile]
 
-    if manifest.package_manager:
-        return manifest.package_manager 
+   
 
     # 3. defaults by app type
     if manifest.app_type == "node":

@@ -20,6 +20,7 @@ class Manifest(BaseModel):
 
     # hints (inferred by the inspector; None = not sure, planner verifies)
     app_type: Literal["node", "python", "static"] | None = None
+    package_manager: Literal["npm", "pnpm", "yarn", "bun", "pip", "uv", "poetry"] | None = None
     role: Literal["frontend", "backend", "fullstack"] | None = None
     start_command: str | None = None
 

@@ -7,9 +7,18 @@ class Manifest(BaseModel):
     Manifest model for the Vibe Agent.
     """
     folder: str
+
+    #evidence - (regular app)
     markers: list[str]
     marker_files: dict[str, str]
     files: list[str]
+    lockfile: str | None = None 
+
+    # monorepo only ( Returns none for normal apps)
+    workspace_root: str | None = None
+    shared_packages: list[str] = []
+
+    # hints (inferred by the inspector; None = not sure, planner verifies)
     app_type: Literal["node", "python", "static"] | None = None
     role: Literal["frontend", "backend", "fullstack"] | None = None
     start_command: str | None = None

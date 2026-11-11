@@ -4,6 +4,21 @@ import json
 MAX_FILES= 2000
 MAX_TOTAL_SIZE=200 * 1024 * 1024 #200MB
 
+FOLDERS_TO_SKIP =[
+    "__MACOSX", "node_modules", ".git", ".venv", "venv",
+         "dist", "build", ".next", "out", "__pycache__"
+]
+
+def is_junk_folder(name: str ) -> bool:
+
+    for piece in name.split("/"):
+        if piece in FOLDERS_TO_SKIP:
+            return True
+    return False
+
+    
+
+     
 MARKERS = {
     "package.json": "node",
     "requirements.txt": "python",
@@ -50,10 +65,12 @@ def choose_app_type(app_types : list[str]):
         return "static"
 
 
-def find_apps(file_names: list[str],workspace_roots: list[str] = []):
+def find_apps(file_names: list[str], workspace_roots: list[str] | None = None):
+    if workspace_roots is None:
+        workspace_roots = []
     marker_files = []
     for name in file_names:
-        if "__MACOSX/" in name or "node_modules/" in name:
+        if is_junk_folder(name):
             continue
 
         file = name.split("/")[-1]
@@ -116,7 +133,7 @@ def find_workspace_roots(path: str, names: list[str]):
     workspace_roots = []
     with zipfile.ZipFile(path) as zip_file:
         for name in names:
-            if "__MACOSX/" in name or "node_modules/" in name:
+            if is_junk_folder(name):
                 continue
 
             file =  name.split("/")[-1]
@@ -126,9 +143,10 @@ def find_workspace_roots(path: str, names: list[str]):
 
             if file == "package.json":
                 raw_bytes = zip_file.read(name)
-                text = raw_bytes.decode()
+                
 
                 try:
+                    text = raw_bytes.decode()
                     data = json.loads(text)
                 except ValueError:
                     continue
@@ -164,7 +182,7 @@ def find_package_manager(app: dict, names: list[str]):
 
     #  a lock file in the app's own folder?
     for name in names:
-        if "__MACOSX/" in name or "node_modules/" in name:
+        if is_junk_folder(name):
             continue
         file = name.split("/")[-1]
         if file not in lock_files:
@@ -175,7 +193,7 @@ def find_package_manager(app: dict, names: list[str]):
 
     #  a lock file in a folder ABOVE the app? (monorepo root)
     for name in names:
-        if "__MACOSX/" in name or "node_modules/" in name:
+        if is_junk_folder(name):
             continue
         file = name.split("/")[-1]
         if file not in lock_files:
@@ -183,7 +201,7 @@ def find_package_manager(app: dict, names: list[str]):
         folder = name.removesuffix(file)
         if app["folder"].startswith(folder):
             return lock_files[file]
-
+    return manager
 
 
 def add_package_managers(apps: list[dict], names: list[str]):
@@ -197,7 +215,7 @@ def find_libraries(path: str, names: list[str]):
     packages = []
     with zipfile.ZipFile(path) as zip_file:
          for name in names:
-            if "__MACOSX/" in name or "node_modules/" in name:
+            if is_junk_folder(name):
                 continue
             file = name.split("/")[-1]
             if file != "package.json":
@@ -205,9 +223,10 @@ def find_libraries(path: str, names: list[str]):
 
             folder = name.removesuffix(file)
             raw_bytes = zip_file.read(name)
-            text = raw_bytes.decode()
+            
 
             try:
+                text = raw_bytes.decode()
                 data = json.loads(text)
             except ValueError:
                 continue

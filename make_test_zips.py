@@ -32,4 +32,17 @@ with zipfile.ZipFile("two-sites.zip", "w") as z:
     z.writestr("shop/package.json", json.dumps({"name": "shop", "dependencies": {"react": "18"}}))
     z.writestr("admin/package.json", json.dumps({"name": "admin", "dependencies": {"react": "18"}}))
 
+
+with zipfile.ZipFile("junk.zip", "w") as z:
+    z.writestr("proj/backend/requirements.txt", "fastapi\n")
+    z.writestr("proj/backend/main.py", "")
+    z.writestr("proj/backend/__pycache__/main.cpython-312.pyc", "x")
+    z.writestr("proj/.venv/lib/site-packages/somepkg/package.json", json.dumps({"name": "somepkg"}))
+    z.writestr("proj/dist/index.html", "<h1>built</h1>")
+    z.writestr("proj/.git/config", "")
+
+with zipfile.ZipFile("binary.zip", "w") as z:
+    z.writestr("site/package.json", b"\xff\xfe\x00\x01")
+    z.writestr("site/index.html", "<h1>hi</h1>")
+
 print("made good.zip, too-many.zip, too-big.zip, escape.zip")

@@ -57,7 +57,9 @@ def list_zip_files( path: str ):
 
 
 def choose_app_type(app_types : list[str]):
-    if "node" in app_types:
+    if "node" in app_types and "python" in app_types:
+        return None
+    elif "node" in app_types:
         return "node"
     elif "python" in app_types:
         return "python"
@@ -157,30 +159,23 @@ def find_workspace_roots(path: str, names: list[str]):
 
     return workspace_roots
 
-NODE_LOCKS = {
-    "package-lock.json": "npm",
-    "yarn.lock": "yarn",
-    "pnpm-lock.yaml": "pnpm",
-    "bun.lockb": "bun",
-    "bun.lock": "bun",
-}
-PYTHON_LOCKS = {
-    "poetry.lock": "poetry",
-    "uv.lock": "uv",
-}
+NODE_LOCK_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock"]
+PYTHON_LOCK_FILES = ["poetry.lock", "uv.lock"]
 
-def find_package_manager(app: dict, names: list[str]):
+def find_lockfile( app: dict, names: list[str])  -> str | None:
     #  set up from the app's type
     if app["app_type"] == "node":
-        lock_files = NODE_LOCKS
-        manager = "npm"            # the guess
+        lock_files = NODE_LOCK_FILES
+                  
     elif app["app_type"] == "python":
-        lock_files = PYTHON_LOCKS
-        manager = "pip"            # the guess
+        lock_files = PYTHON_LOCK_FILES
+                 
+    elif app["app_type"] == "static":
+        return None
     else:
-        return "none"              # static: nothing to install
+        lock_files = NODE_LOCK_FILES + PYTHON_LOCK_FILES            
 
-    #  a lock file in the app's own folder?
+    
     for name in names:
         if is_junk_folder(name):
             continue
@@ -189,7 +184,7 @@ def find_package_manager(app: dict, names: list[str]):
             continue
         folder = name.removesuffix(file)
         if folder == app["folder"]:
-            return lock_files[file]
+            return file
 
     #  a lock file in a folder ABOVE the app? (monorepo root)
     for name in names:
@@ -200,13 +195,13 @@ def find_package_manager(app: dict, names: list[str]):
             continue
         folder = name.removesuffix(file)
         if app["folder"].startswith(folder):
-            return lock_files[file]
-    return manager
+            return file
+    return None
 
 
-def add_package_managers(apps: list[dict], names: list[str]):
+def add_lockfiles(apps: list[dict], names: list[str]):
     for app in apps:
-        app["package_manager"] = find_package_manager(app,names)
+        app["lockfile"] = find_lockfile(app,names)
     return apps
 
 

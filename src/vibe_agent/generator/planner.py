@@ -12,6 +12,54 @@ FRAMEWORK_BY_PACKAGE = {
     "hono": "node-server",
 }
 
+LOCKFILE_TO_MANAGER = {
+    "package-lock.json": "npm",
+    "pnpm-lock.yaml": "pnpm",
+    "yarn.lock": "yarn",
+    "uv.lock": "uv",
+    "poetry.lock": "poetry",
+    "bun.lock": "npm",       
+    "bun.lockb": "npm",
+}
+
+INSTALL_WITH_LOCKFILE = {
+    "npm": "npm ci",
+    "pnpm": "pnpm install --frozen-lockfile",
+    "yarn": "yarn install --immutable",
+    "bun": "bun install --frozen-lockfile",
+    "pip": "pip install --no-cache-dir -r requirements.txt",
+    "uv": "uv sync --frozen",
+    "poetry": "poetry install --no-root",
+}
+
+INSTALL_WITHOUT_LOCKFILE = {
+    "npm": "npm install",
+    "pnpm": "pnpm install",
+    "yarn": "yarn install",
+    "bun": "bun install",
+    "pip": "pip install --no-cache-dir -r requirements.txt",
+    "uv": "uv sync",
+    "poetry": "poetry install --no-root",
+}
+
+RUN_SCRIPT = {
+    "npm": "npm run",
+    "pnpm": "pnpm run",
+    "yarn": "yarn",
+    "bun": "bun run",
+}
+
+# how each package manager runs a package's tool directly (no script needed)
+EXEC_TOOL = {
+    "npm": "npx",
+    "pnpm": "pnpm exec",
+    "yarn": "yarn",
+    "bun": "bunx",
+}
+
+
+UNKNOWN = "unknown"
+
 def read_package_json(manifest: Manifest) -> dict:
     text = manifest.marker_files.get("package.json")
     if text is None:
@@ -68,3 +116,62 @@ def detect_framework(manifest: Manifest) -> str | None:
     #if nothing matched then return none 
     return None
 
+
+def detect_package_manager(manifest:Manifest) -> str | None:
+    if manifest.lockfile in LOCKFILE_TO_MANAGER:
+        return LOCKFILE_TO_MANAGER[manifest.lockfile]
+
+    if manifest.package_manager:
+        return manifest.package_manager 
+
+    # 3. defaults by app type
+    if manifest.app_type == "node":
+        return "npm"
+
+    if manifest.app_type == "python":
+        return "pip"
+
+    if manifest.app_type == "static":
+        return None
+
+    return UNKNOWN
+
+
+def pick_install_command(package_manager: str | None, has_lockfile: bool) -> str | None:
+    # static site: nothing to install
+    if package_manager is None:
+        return None
+
+    # unknown package manager: can't pick a command
+    if package_manager == UNKNOWN:
+        return UNKNOWN
+
+    # lockfile exists: strict install (exact versions)
+    if has_lockfile:
+        return INSTALL_WITH_LOCKFILE.get(package_manager, UNKNOWN)
+
+    # no lockfile: relaxed install
+    return INSTALL_WITHOUT_LOCKFILE.get(package_manager, UNKNOWN)
+
+
+def detect_build_command(manifest: Manifest, framework:str , package_manager: str|None) -> str | None:
+    if framework == UNKNOWN:
+        return UNKNOWN
+    
+    if framework in ["static" , "fastapi"]:
+        return None
+
+    # 3. get the scripts from package.json - using the read_package_json function
+    scripts = read_package_json(manifest).get("scripts",{})
+
+     # 4. if it has a "build" script: run it by name with the right package manager
+     if "build" in scripts:
+            return f"{RUN_SCRIPT.get(package_manager,'npm run')} build"
+
+    if framework in ["next", "vite"]:
+        return f"{EXEC_TOOL.get(package_manager, 'npx')}{framework} build"
+
+    # 6. anything else (node-server with no build script): no build step
+    return None
+
+    

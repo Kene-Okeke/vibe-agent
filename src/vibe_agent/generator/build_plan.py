@@ -5,7 +5,7 @@ from pydantic import BaseModel, Field
 class BuildPlan(BaseModel):
     framework: Literal["next", "vite", "node-server", "fastapi", "static"]
     runtime_version:str
-    package_manager: Literal["npm","pnpm","yarn", "pip","uv", "poetry"]| None = None 
+    package_manager: Literal["npm","pnpm","yarn", "pip","uv","bun", "poetry"]| None = None 
         # none below means this is a static site, so no package manager is needed
     has_lockfile: bool=False
         # if has_lockfile is True → npm ci (exact versions)

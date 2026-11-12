@@ -1,4 +1,4 @@
-from vibe_agent.inspector.inspector import list_zip_files, find_apps
+from vibe_agent.inspector.inspector import list_zip_files, find_apps,read_packages
 
 # for name in ["good.zip", "too-many.zip", "too-big.zip", "escape.zip"]:
 #     try:
@@ -28,7 +28,8 @@ for name in ["good.zip", "monorepo.zip", "two-sites.zip", "broken-json.zip", "ju
     path = "test-zips/" + name
     names = list_zip_files(path)
     roots = find_workspace_roots(path, names)
-    libraries = find_libraries(path, names)
+    packages = read_packages(path, names) 
+    libraries = find_libraries(packages)
     print(name, "roots:", roots, "libraries:", libraries)
     print("   apps:", find_apps(names, roots + libraries))
 

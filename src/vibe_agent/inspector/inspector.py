@@ -160,6 +160,15 @@ def find_workspace_roots(path: str, names: list[str]):
 
     return workspace_roots
 
+def find_one_workspace_root( app: dict, roots: list[str] ) -> str | None:
+    if app["app_type"]!= "node":
+        return None
+
+    for root in roots:
+        if app["folder"].startswith(root):
+            return root
+
+    return None  
 
 
 NODE_LOCK_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock"]
@@ -213,10 +222,10 @@ def add_lockfiles(apps: list[dict], names: list[str]):
 
 
 
-def find_libraries(path: str, names: list[str]):
+def read_packages(path: str, names: list[str]):
     packages = []
     with zipfile.ZipFile(path) as zip_file:
-         for name in names:
+        for name in names:
             if is_junk_folder(name):
                 continue
             file = name.split("/")[-1]
@@ -246,7 +255,9 @@ def find_libraries(path: str, names: list[str]):
                     uses.append(dependency)
 
             packages.append({"folder": folder, "name": data["name"], "uses": uses})
+    return packages
 
+def find_libraries(packages: list[dict]):
     libraries = []
     for package in packages:
         for other_package in packages:
@@ -255,7 +266,28 @@ def find_libraries(path: str, names: list[str]):
                     libraries.append(package["folder"])
     return libraries
 
-            
+def find_local_packages(app: dict, packages: list[dict] )  -> list[str]:
+    uses = []
+    for package in packages:
+        if package["folder"]==app["folder"]:
+            uses.append(package["uses"])
+
+    local_packages = []
+    for package in packages:
+        if package["name"] in uses:
+            local_packages.append(package["folder"])
+
+    return local_packages
+
+
+def add_monorepo_info(apps: list[dict], roots: list[str], packages: list[dict] ) -> list[dict]:
+    for app in apps:
+        app["workspace_root"] = find_one_workspace_root(app, roots)
+        app["local_packages"] = find_local_packages(app, packages)
+    return apps
+    
+             
+              
                 
 
 

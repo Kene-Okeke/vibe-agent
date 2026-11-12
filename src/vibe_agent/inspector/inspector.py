@@ -286,9 +286,57 @@ def add_monorepo_info(apps: list[dict], roots: list[str], packages: list[dict] )
         app["local_packages"] = find_local_packages(app, packages)
     return apps
     
-             
-              
-                
+def is_secret(file:str) -> bool:
+    if file == ".env" or file.startswith(".env."):
+        return True
+    return False
+
+
+MAX_FILES_LISTED = 500 
+def find_app_files(app: dict, names: list[str] ) -> list[str]:
+    files = []
+    for name in names:
+        if is_junk_folder(name):
+            continue
+        if not name.startswith(app["folder"]):
+            continue
+        file = name.split("/")[-1]
+        if is_secret(file) == True:
+            continue
+ 
+        files.append(name.removeprefix(app["folder"]))
+        if len(files)==MAX_FILES_LISTED:
+            break
+
+    return files
+
+EVIDENCE_FILES = ["package.json", "requirements.txt", "pyproject.toml", "index.html", ".nvmrc", ".python-version"]
+def is_marker(file: str) -> bool:
+    if file in EVIDENCE_FILES or  file in NODE_LOCK_FILES or  file in PYTHON_LOCK_FILES:
+        return True
+    if file.startswith("vite.config.") or file.startswith("next.config."):
+        return True
+
+    return False
+
+
+def find_markers(files: list[str] ) -> list[str]:
+    markers = []
+    for file in files:
+        if "/" in file:
+            continue
+        if is_marker(file):
+            markers.append(file)
+    return markers
+
+
+
+
+    
+
+
+
+
 
 
 

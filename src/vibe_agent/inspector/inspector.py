@@ -6,7 +6,7 @@ MAX_TOTAL_SIZE=200 * 1024 * 1024 #200MB
 
 FOLDERS_TO_SKIP =[
     "__MACOSX", "node_modules", ".git", ".venv", "venv",
-         "dist", "build", ".next", "out", "__pycache__"
+         "dist", "build", ".next", "out", "__pycache__," "vendor"
 ]
 
 def is_junk_folder(name: str ) -> bool:
@@ -119,12 +119,14 @@ def find_apps(file_names: list[str], workspace_roots: list[str] | None = None):
     result = []
     for service in services:
         inside_another = False
-
+        if service["app_type"]!= "static":
+            result.append(service)
+            continue
         for parent_directory in services:
-            if service["folder"] != parent_directory["folder"]:
-                if service["folder"].startswith(parent_directory["folder"]):
-                    inside_another = True
-                    break
+                if service["folder"] != parent_directory["folder"]:
+                    if service["folder"].startswith(parent_directory["folder"]):
+                        inside_another = True
+                        break
 
         if not inside_another:
             result.append(service) # services(folder and app type ) where the folders are not inside another folder
@@ -145,8 +147,7 @@ def find_workspace_roots(path: str, names: list[str]):
 
             if file == "package.json":
                 raw_bytes = zip_file.read(name)
-                
-
+            
                 try:
                     text = raw_bytes.decode()
                     data = json.loads(text)
@@ -159,9 +160,10 @@ def find_workspace_roots(path: str, names: list[str]):
 
     return workspace_roots
 
+
+
 NODE_LOCK_FILES = ["package-lock.json", "yarn.lock", "pnpm-lock.yaml", "bun.lockb", "bun.lock"]
 PYTHON_LOCK_FILES = ["poetry.lock", "uv.lock"]
-
 def find_lockfile( app: dict, names: list[str])  -> str | None:
     #  set up from the app's type
     if app["app_type"] == "node":
@@ -198,6 +200,11 @@ def find_lockfile( app: dict, names: list[str])  -> str | None:
             return file
     return None
 
+# app = {"folder": "vibe-deploy/frontend/", "app_type": "node", "lockfile": "package-lock.json"}
+
+# app["folder"]       # 'vibe-deploy/frontend/'
+# app["app_type"]     # 'node'
+# app["lockfile"]     # 'package-lock.json'
 
 def add_lockfiles(apps: list[dict], names: list[str]):
     for app in apps:
@@ -231,7 +238,6 @@ def find_libraries(path: str, names: list[str]):
 
             
             uses=[]
-            
             if "dependencies" in data:
                 for dependency in data["dependencies"]:
                     uses.append(dependency)
@@ -242,7 +248,6 @@ def find_libraries(path: str, names: list[str]):
             packages.append({"folder": folder, "name": data["name"], "uses": uses})
 
     libraries = []
-
     for package in packages:
         for other_package in packages:
             if other_package["folder"] != package["folder"] and package["name"] in other_package["uses"]:

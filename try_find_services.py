@@ -12,6 +12,11 @@ samples = {
     "your repo": ["vibe-deploy/backend/requirements.txt", "vibe-deploy/backend/app/main.py",
                   "vibe-deploy/frontend/package.json", "vibe-deploy/frontend/index.html"],
     "nothing known": ["notes.txt", "photo.png"],
+
+    "vite public folder": ["web/package.json", "web/index.html", "web/public/index.html"],
+    "server inside node app": ["web/package.json", "web/index.html", "web/server/package.json"],
+    "python inside node app": ["app/package.json", "app/backend/requirements.txt"],
+    "site at ZIP root + api": ["index.html", "api/requirements.txt"],
 }
 
 for label, names in samples.items():

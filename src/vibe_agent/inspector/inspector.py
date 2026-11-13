@@ -1,5 +1,6 @@
 import zipfile
 import json
+from vibe_agent.manifest import Manifest
 
 MAX_FILES= 2000
 MAX_TOTAL_SIZE=200 * 1024 * 1024 #200MB
@@ -330,14 +331,53 @@ def find_markers(files: list[str] ) -> list[str]:
     return markers
 
 
+FILES_TO_READ = ["package.json", "requirements.txt", "pyproject.toml", ".nvmrc", ".python-version"]
+MAX_MARKER_BYTES = 64 * 1024
+
+def should_read(file: str ) -> bool:
+
+    if file in FILES_TO_READ:
+        return True
+    if file.startswith("vite.config.") or file.startswith("next.config."):
+        return True
+    return False
 
 
-    
+def read_marker_files( app: dict, path: str, markers: list[str] ) -> dict[str, str]:
+    marker_files={}
+    with zipfile.ZipFile(path) as zip_file:
+        for marker in markers:
+            if not should_read(marker):
+                continue
+
+            raw_bytes = zip_file.read(app["folder"] + marker)
+            if len(raw_bytes) > MAX_MARKER_BYTES:
+                continue
+            try:
+                text = raw_bytes.decode()
+            except ValueError:
+                continue
+
+            marker_files[marker]=text
+
+    return marker_files
 
 
+def build_manifest( app: dict, path: str, names: list[str] ) -> Manifest:
 
-
-
+    files = find_app_files(app, names)
+    markers = find_markers(files)
+    marker_files = read_marker_files(app, path, markers)
+    return Manifest(
+        folder = app["folder"],
+        markers=markers,
+        marker_files=marker_files,
+        files = files,
+        lockfile=app['lockfile'],
+        workspace_root=app['workspace_root'],
+        shared_packages = app['local_packages'],
+        app_type=app['app_type']
+    )
 
 
              

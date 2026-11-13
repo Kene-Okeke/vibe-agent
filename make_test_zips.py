@@ -45,4 +45,16 @@ with zipfile.ZipFile("binary.zip", "w") as z:
     z.writestr("site/package.json", b"\xff\xfe\x00\x01")
     z.writestr("site/index.html", "<h1>hi</h1>")
 
+with zipfile.ZipFile("evidence.zip", "w") as z:
+    z.writestr("proj/web/package.json", json.dumps({"name": "web", "scripts": {"build": "vite build"}, "devDependencies": {"vite": "5"}}))
+    z.writestr("proj/web/package-lock.json", "{}")
+    z.writestr("proj/web/vite.config.ts", "export default {}")
+    z.writestr("proj/web/index.html", "<div id=root></div>")
+    z.writestr("proj/web/.env", "SECRET=xxx")
+    z.writestr("proj/web/src/App.jsx", "")
+    z.writestr("proj/api/requirements.txt", "fastapi\n" * 10000)
+    z.writestr("proj/api/pyproject.toml", b"\xff\xfe\x00\x01")
+    z.writestr("proj/api/.python-version", "3.12\n")
+    z.writestr("proj/api/app/main.py", "")
+    
 print("made good.zip, too-many.zip, too-big.zip, escape.zip")

@@ -57,8 +57,26 @@ EXEC_TOOL = {
     "bun": "bunx",
 }
 
+FASTAPI_MODULES = {
+    "main.py": "main",
+    "app/main.py": "app.main",
+    "src/main.py": "src.main",
+    "app.py": "app",
+}
+# words that mean "development mode": never used in production
+DEV_WORDS = ["nodemon", "--watch", "--reload", "next dev"]
+
+NODE_ENTRY_FILES = ["server.js", "index.js", "app.js", "src/server.js", "src/index.js"]
 
 UNKNOWN = "unknown"
+
+PORT_BY_FRAMEWORK = {
+    "next": 3000,          # Next.js default
+    "node-server": 3000,   # common Express default
+    "fastapi": 8000,       # must match --port 8000 in the uvicorn command
+    "vite": 80,            # Caddy serves the built files on port 80
+    "static": 80,          # same: Caddy
+}
 
 def read_package_json(manifest: Manifest) -> dict:
     text = manifest.marker_files.get("package.json")
@@ -121,8 +139,6 @@ def detect_package_manager(manifest:Manifest) -> str | None:
     if manifest.lockfile in LOCKFILE_TO_MANAGER:
         return LOCKFILE_TO_MANAGER[manifest.lockfile]
 
-   
-
     # 3. defaults by app type
     if manifest.app_type == "node":
         return "npm"
@@ -133,7 +149,7 @@ def detect_package_manager(manifest:Manifest) -> str | None:
     if manifest.app_type == "static":
         return None
 
-    return UNKNOWN
+    return UNKNOWN #llm comes in if the funciton reaches unknown
 
 
 def pick_install_command(package_manager: str | None, has_lockfile: bool) -> str | None:
@@ -153,7 +169,8 @@ def pick_install_command(package_manager: str | None, has_lockfile: bool) -> str
     return INSTALL_WITHOUT_LOCKFILE.get(package_manager, UNKNOWN)
 
 
-def detect_build_command(manifest: Manifest, framework:str , package_manager: str|None) -> str | None:
+def detect_build_command(manifest: Manifest, 
+:str , package_manager: str|None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN
     
@@ -164,7 +181,7 @@ def detect_build_command(manifest: Manifest, framework:str , package_manager: st
     scripts = read_package_json(manifest).get("scripts",{})
 
      # 4. if it has a "build" script: run it by name with the right package manager
-     if "build" in scripts:
+    if "build" in scripts:
             return f"{RUN_SCRIPT.get(package_manager,'npm run')} build"
 
     if framework in ["next", "vite"]:
@@ -173,4 +190,50 @@ def detect_build_command(manifest: Manifest, framework:str , package_manager: st
     # 6. anything else (node-server with no build script): no build step
     return None
 
+def is_dev_command(command: str) -> bool:
+    for word in DEV_WORDS:
+        if word in command:
+            return True
+    return False
+
+
+def detect_start_command(manifest: Manifest, framework:str, package_manager: str | None) -> str | None:
+    if framework == UNKNOWN:
+        return UNKNOWN
+
+    if framework in ["vite", "static"]:
+        return None
     
+    scripts = read_package_json(manifest).get("scripts", {})
+
+    if framework == "next":
+        if "start" in scripts:
+            return f"{RUN_SCRIPT.get(package_manager,'npm run')} start"
+        return f"{EXEC_TOOL.get(package_manager,'npx')} next start"
+     
+    if framework == "fastapi":
+        for path, module in FASTAPI_MODULES.items():
+            if path in manifest.files:
+               return f"uvicorn {module}:app --host 0.0.0.0 --port 8000"
+        return UNKNOWN
+
+    if framework == "node-server":
+        if "start" in scripts and not is_dev_command(scripts["start"]):
+            return f"{RUN_SCRIPT.get(package_manager, 'npm run')} start"
+        
+        # ↓ only reached if the line above did NOT return, so it works like "else"
+        dev_script = scripts.get("dev", "")
+        for word in dev_script.split():
+            if word.endswith(".js"):
+                return f"node {word}"
+
+        # ↓ only reached if no .js file was in the dev script
+        for name in NODE_ENTRY_FILES:
+            if name in manifest.files:
+                return f"node {name}"
+
+         # ↓ only reached if none of the common files exist
+        return UNKNOWN
+
+    return UNKNOWN
+ 

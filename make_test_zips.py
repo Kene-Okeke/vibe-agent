@@ -56,5 +56,16 @@ with zipfile.ZipFile("evidence.zip", "w") as z:
     z.writestr("proj/api/pyproject.toml", b"\xff\xfe\x00\x01")
     z.writestr("proj/api/.python-version", "3.12\n")
     z.writestr("proj/api/app/main.py", "")
+
+with zipfile.ZipFile("no-apps.zip", "w") as z:
+    z.writestr("notes/readme.md", "hi")
+    z.writestr("photo.png", b"\x89PNG")
+
+with zipfile.ZipFile("two-libs.zip", "w") as z:
+    z.writestr("repo/package.json", json.dumps({"name": "repo", "workspaces": ["apps/*", "packages/*"]}))
+    z.writestr("repo/apps/web/package.json", json.dumps({"name": "web", "dependencies": {"react": "18", "@repo/ui": "workspace:*"}, "devDependencies": {"@repo/utils": "workspace:*"}}))
+    z.writestr("repo/apps/admin/package.json", json.dumps({"name": "admin", "dependencies": {"@repo/ui": "workspace:*"}}))
+    z.writestr("repo/packages/ui/package.json", json.dumps({"name": "@repo/ui", "dependencies": {"@repo/utils": "workspace:*"}}))
+    z.writestr("repo/packages/utils/package.json", json.dumps({"name": "@repo/utils"}))
     
 print("made good.zip, too-many.zip, too-big.zip, escape.zip")

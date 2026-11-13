@@ -380,7 +380,21 @@ def build_manifest( app: dict, path: str, names: list[str] ) -> Manifest:
     )
 
 
-             
+def inspect( path: str ) -> list[Manifest]:
+    names = list_zip_files(path)
+
+    roots = find_workspace_roots(path,names)
+    packages = read_packages(path,names)
+    libraries = find_libraries(packages)
+    apps = find_apps(names, roots + libraries)
+    apps = add_lockfiles(apps, names)
+    apps = add_monorepo_info(apps, roots, packages)
+
+    manifests = []
+    for app in apps:
+        manifests.append(build_manifest(app,path,names))
+
+    return manifests    
 
 
     

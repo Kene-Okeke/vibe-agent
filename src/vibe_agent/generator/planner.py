@@ -1,6 +1,7 @@
 import json
 import re
 from vibe_agent.manifest import Manifest
+from vibe_agent.generator.build_plan import BuildPlan
 
 FRAMEWORK_BY_PACKAGE = {
     "next": "next",
@@ -18,8 +19,8 @@ LOCKFILE_TO_MANAGER = {
     "yarn.lock": "yarn",
     "uv.lock": "uv",
     "poetry.lock": "poetry",
-    "bun.lock": "npm",       
-    "bun.lockb": "npm",
+   "bun.lock": "bun",
+    "bun.lockb": "bun",
 }
 
 INSTALL_WITH_LOCKFILE = {
@@ -78,6 +79,12 @@ PORT_BY_FRAMEWORK = {
     "static": 80,          # same: Caddy
 }
 
+DEFAULT_RUNTIME = {
+    "node": "22",
+    "python": "3.12",
+    "bun": "1",
+}
+
 def read_package_json(manifest: Manifest) -> dict:
     text = manifest.marker_files.get("package.json")
     if text is None:
@@ -116,7 +123,7 @@ def detect_framework(manifest: Manifest) -> str | None:
     #framework: Literal["next", "vite", "node-server", "fastapi", "static"]
     package_json = read_package_json(manifest)
     if package_json:
-        dependecies = package_json.get("dependencies",{})| package_json.get("devDependencies",{}) 
+        dependencies = package_json.get("dependencies", {})| package_json.get("devDependencies",{}) 
             # | means join dependecies and devDependencies 
         
         for package_name, framework in FRAMEWORK_BY_PACKAGE.items():
@@ -132,7 +139,7 @@ def detect_framework(manifest: Manifest) -> str | None:
         return "static"
 
     #if nothing matched then return none 
-    return None
+    return UNKNOWN
 
 
 def detect_package_manager(manifest:Manifest) -> str | None:
@@ -170,7 +177,7 @@ def pick_install_command(package_manager: str | None, has_lockfile: bool) -> str
 
 
 def detect_build_command(manifest: Manifest, 
-:str , package_manager: str|None) -> str | None:
+framework: str, package_manager: str|None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN
     
@@ -185,7 +192,7 @@ def detect_build_command(manifest: Manifest,
             return f"{RUN_SCRIPT.get(package_manager,'npm run')} build"
 
     if framework in ["next", "vite"]:
-        return f"{EXEC_TOOL.get(package_manager, 'npx')}{framework} build"
+        return f"{EXEC_TOOL.get(package_manager, 'npx')} {framework} build"
 
     # 6. anything else (node-server with no build script): no build step
     return None
@@ -214,7 +221,7 @@ def detect_start_command(manifest: Manifest, framework:str, package_manager: str
     if framework == "fastapi":
         for path, module in FASTAPI_MODULES.items():
             if path in manifest.files:
-               return f"uvicorn {module}:app --host 0.0.0.0 --port 8000"
+                return f"uvicorn {module}:app --host 0.0.0.0 --port 8000"
         return UNKNOWN
 
     if framework == "node-server":
@@ -237,3 +244,106 @@ def detect_start_command(manifest: Manifest, framework:str, package_manager: str
 
     return UNKNOWN
  
+def detect_port(framework: str) -> int | str:
+    # look up the framework's port; UNKNOWN if it's not in the table
+    return PORT_BY_FRAMEWORK.get(framework, UNKNOWN)
+
+def detect_output_dir(manifest: Manifest, framework:str) -> str|None:
+    if framework == "static":
+        return "."
+
+    if framework != "vite":
+        return None
+    
+    # Vite: look for a custom outDir in its config
+    for name in ["vite.config.ts", "vite.config.js", "vite.config.mjs"]:
+        config = manifest.marker_files.get(name)
+        if config:
+            match = re.search(r"outDir\s*:\s*['\"]([^'\"]+)['\"]", config)
+            if match:
+                return match.group(1)
+    
+    # no custom outDir found: Vite's default
+    return "dist"
+
+
+
+def detect_runtime_version(manifest: Manifest, framework: str, package_manager: str | None) -> str | None:
+    # can't tell what the app is → can't tell what it runs on
+    if framework == UNKNOWN:
+        return UNKNOWN
+
+    # static: nothing runs, so no runtime needed
+    if framework == "static":
+        return None
+
+    # Bun apps run on Bun, not Node
+    if package_manager == "bun":
+        return DEFAULT_RUNTIME["bun"]
+
+    # Python: .python-version if the project has one, otherwise the default
+    if framework == "fastapi":
+        pinned = manifest.marker_files.get(".python-version")
+        if pinned:
+            return pinned.strip()
+        return DEFAULT_RUNTIME["python"]
+
+    # everything else runs on Node: .nvmrc if present, otherwise the default
+    pinned = manifest.marker_files.get(".nvmrc")
+    if pinned:
+        return pinned.strip().removeprefix("v")
+    return DEFAULT_RUNTIME["node"]
+
+
+def make_build_plan(manifest: Manifest) -> BuildPlan:
+    # 1. what kind of app is this?
+    framework = detect_framework(manifest)
+
+    # 2. how are its packages installed?
+    package_manager = detect_package_manager(manifest)
+    has_lockfile = manifest.lockfile is not None
+    install_command = pick_install_command(package_manager, has_lockfile)
+
+    # 3. how is it built and started?
+    build_command = detect_build_command(manifest, framework, package_manager)
+    start_command = detect_start_command(manifest, framework, package_manager)
+
+    # 4. where are the built files, which port, which runtime?
+    output_dir = detect_output_dir(manifest, framework)
+    port = detect_port(framework)
+    runtime_version = detect_runtime_version(manifest, framework, package_manager)
+
+
+    answers = {
+        "framework": framework,
+        "install_command": install_command,
+        "build_command": build_command,
+        "start_command": start_command,
+        "port": port,
+        "runtime_version": runtime_version,
+    }
+
+    unknowns = []
+    for name, value in answers.items():
+        if value == UNKNOWN:
+            unknowns.append(name)
+
+    if unknowns:
+        raise ValueError(f"Couldn't work out: {', '.join(unknowns)}")
+
+    # 6. everything decided by rules, so we're confident
+    confidence = "high"
+
+    # 7. create the plan: pydantic checks every field here
+    return BuildPlan(
+        framework=framework,
+        runtime_version=runtime_version,
+        package_manager=package_manager,
+        has_lockfile=has_lockfile,
+        install_command=install_command,
+        build_command=build_command,
+        start_command=start_command,
+        output_dir=output_dir,
+        port=port,
+        confidence=confidence,
+    )

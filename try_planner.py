@@ -14,3 +14,11 @@ vite_app = Manifest(
 
 plan = make_build_plan(vite_app)
 print(plan.model_dump_json(indent=2))
+
+from vibe_agent.generator.render import render_dockerfile
+
+print(render_dockerfile(plan))
+
+from vibe_agent.generator.render import render_dockerignore
+
+print(render_dockerignore())

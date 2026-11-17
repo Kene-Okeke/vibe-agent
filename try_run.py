@@ -7,7 +7,7 @@ CMD ["sh", "-c", "echo DATABASE_URL is missing; exit 1"]
 
 path = "test-zips/good.zip"
 manifest = inspect(path)[0]
-print("build crash:", build(path, manifest, CRASH_DOCKERFILE, "vibe-crash:1")["ok"])
+print("build crash:", build(path, manifest, CRASH_DOCKERFILE, "vibe-crash:1",{})["ok"])
 
 tests = [
     ("site", "vibe-good:1", 80, {"GREETING": "hello"}),

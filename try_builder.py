@@ -31,7 +31,7 @@ tests = [
 for name, dockerfile, tag in tests:
     path = "test-zips/" + name
     manifest = inspect(path)[0]
-    result = build(path, manifest, dockerfile, tag)
+    result = build(path, manifest, dockerfile, tag,{})
     print(name, "->", tag, "| ok:", result["ok"])
     if not result["ok"]:
         print("   error:", result["logs"].splitlines()[-1])

@@ -2,8 +2,11 @@ import shutil
 import subprocess
 import tempfile
 import zipfile
+import time
 
 from vibe_agent.manifest import Manifest
+
+# --------------build----------------------------------------------------------
 
 def unpack_upload( path: str ) -> str:
     temporary_folder = tempfile.mkdtemp(prefix="vibe-build-")
@@ -29,7 +32,7 @@ def build_image(build_folder: str, tag: str ) -> dict:
     result = subprocess.run(["docker", "build", "--progress=plain", "-t", tag, "."],cwd=build_folder, capture_output=True, text=True)
     logs  = result.stdout + result.stderr
 
-    if result.returncode is not 0:
+    if result.returncode != 0:
         return {"ok": False, "logs": logs}
     return {"ok":True, "logs":logs}
 
@@ -39,6 +42,55 @@ def build( path: str, manifest: Manifest, dockerfile: str, tag: str ) -> dict:
     write_build_files(build_folder,dockerfile)
     result = build_image(build_folder,tag)
     shutil.rmtree(unpacked) 
+    return result
+
+
+
+#------------------run----------------------------------------------
+
+def env_flags(runtime_env: dict[str,str]) -> list[str]:
+    flags = []
+    for key,value in runtime_env.items():
+        flags.append("-e")
+        flags.append(key+"="+value)
+    return flags
+
+def is_running(container_id: str) -> bool:
+    result = subprocess.run(["docker", "inspect", "-f", "{{.State.Running}}", container_id], capture_output=True, text=True)
+    return result.stdout.strip() == "true"
+
+def container_logs(container_id: str ) -> str:
+    result = subprocess.run(["docker", "logs",container_id], capture_output=True, text=True)
+    return result.stdout + result.stderr
+
+def find_address(container_id: str, port: int ) -> str:
+    result = subprocess.run(["docker", "port", container_id, str(port)], capture_output=True, text=True)
+    return result.stdout.splitlines()[0]
+
+def remove_container( container_id: str ) -> None:
+    subprocess.run(["docker", "rm", "-f", container_id])
+
+
+def run ( tag:  str, port: int, runtime_env: dict[str, str] ) -> dict:
+    command = ["docker", "run", "-d", "--pull", "never", "-p", "127.0.0.1::" + str(port)] + env_flags(runtime_env) + [tag]
+
+    result = subprocess.run(command, capture_output=True, text=True)
+    if result.returncode != 0:
+        return {"ok": False, "logs": result.stderr}
+
+    container_id = result.stdout.strip()
+    time.sleep(2)
+
+    if is_running(container_id) is False:
+        logs = container_logs(container_id)
+        remove_container(container_id)
+        return {"ok":False,"logs":logs}
+
+
+    return{"ok": True, "container_id":container_id,"url":'http://'+find_address(container_id,port) }
+
+
+
 
 
 

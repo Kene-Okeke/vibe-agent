@@ -1,14 +1,15 @@
 from vibe_agent.manifest import Manifest
 import json
 import os
-from dotenv import load_dotenv
+from dotenv import load_dotenv, find_dotenv
 from google import genai
 from google.genai import types
-from vibe_agent.manifest import Manifest
 
-load_dotenv()   # read .env so os.getenv can find GEMINI_API_KEY
+
+load_dotenv(find_dotenv(usecwd=True)) # read .env so os.getenv can find GEMINI_API_KEY
 
 MODEL = "gemini-3.6-flash"
+LLM_TIMEOUT_MS = 120_000  
 
 # what each field means, so the LLM knows exactly what we want back
 FIELD_HELP = {
@@ -55,15 +56,16 @@ Reply with ONLY a JSON object with exactly these keys. No explanation, no markdo
 
 def ask_llm(prompt:str) -> dict:
     # connect to Gemini with the key from .env
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"), http_options=types.HttpOptions(timeout=LLM_TIMEOUT_MS ))
 
     # send the prompt, wait for the reply
     response = client.models.generate_content(
         model=MODEL,
         contents=prompt,
         config=types.GenerateContentConfig(
-            response_mime_type="application/json",   # reply must be JSON
-            temperature=0,   # no creativity: same input, same answer
+            response_mime_type="application/json",
+            temperature=0,
+            thinking_config=types.ThinkingConfig(thinking_level="low"),   # simple question: don't overthink
         ),
     )
     # turn the reply text into a Python dict

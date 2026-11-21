@@ -1,5 +1,6 @@
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.llm_fallback import build_llm_prompt
+from vibe_agent.generator.llm_fallback import ask_llm
 
 # an Express app the rules CAN'T fully figure out:
 # no "start" script, and the entry file isn't one of our usual names
@@ -25,3 +26,4 @@ answers = {
 unknowns = ["start_command"]
 
 print(build_llm_prompt(weird_app, answers, unknowns))
+print(ask_llm(build_llm_prompt(weird_app, answers, unknowns)))

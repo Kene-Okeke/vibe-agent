@@ -203,6 +203,20 @@ def is_dev_command(command: str) -> bool:
             return True
     return False
 
+# this check is for the llm , start command is something that could be wrong and we have to check 
+# if the js file exists in the file path - thisb lets us know if the llm really got the strat command to prevent crashes 
+
+def start_file_exists(manifest: Manifest, start_command: str) -> bool:
+    for word in start_command.split():
+        if word.endswith(".js"):
+            # found the filename: is it really in the project?
+            if word in manifest.files:
+                return True      # case 1: file exists ✅
+            else:
+                return False     # case 2: file made up ❌
+
+    # case 3: no .js word at all (e.g. "npm run start"), nothing to check
+    return True
 
 def detect_start_command(manifest: Manifest, framework:str, package_manager: str | None) -> str | None:
     if framework == UNKNOWN:

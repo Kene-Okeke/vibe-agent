@@ -2,6 +2,7 @@ import json
 import re
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.build_plan import BuildPlan
+from vibe_agent.generator.llm_fallback import build_llm_prompt, ask_llm
 
 FRAMEWORK_BY_PACKAGE = {
     "next": "next",
@@ -237,6 +238,22 @@ def check_llm_answers(manifest: Manifest, llm_answers: dict, unknowns:list[str])
     # 3. passed every check: safe to use
     return checked
 
+def fill_unknowns_with_llm(manifest: Manifest,answers:dict, unknowns:list[str]) -> dict:
+    # ask the LLM; a timeout or network error means it couldn't help
+    try:
+        prompt = build_llm_prompt(manifest,answers,unknowns)
+        llm_answers = ask_llm(prompt)
+    except Exception as error:
+       raise ValueError(f"Couldn't work out: {', '.join(unknowns)} (LLM unavailable: {error})")
+
+    # judge the reply (raises ValueError if it's wrong)
+    checked = check_llm_answers(manifest, llm_answers, unknowns)
+
+       # the rules' answers, with the gaps filled in
+    return answers | checked
+
+
+
 def detect_start_command(manifest: Manifest, framework:str, package_manager: str | None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN
@@ -361,22 +378,25 @@ def make_build_plan(manifest: Manifest) -> BuildPlan:
         if value == UNKNOWN:
             unknowns.append(name)
 
-    if unknowns:
-        raise ValueError(f"Couldn't work out: {', '.join(unknowns)}")
-
     # 6. everything decided by rules, so we're confident
     confidence = "high"
 
+    if unknowns:
+       answers = fill_unknowns_with_llm(manifest,answers, unknowns)
+       confidence = "medium"
+
+       output_dir = detect_output_dir(manifest, answers["framework"])
+
     # 7. create the plan: pydantic checks every field here
     return BuildPlan(
-        framework=framework,
-        runtime_version=runtime_version,
+        framework=answers["framework"],
+        runtime_version=answers["runtime_version"],
         package_manager=package_manager,
         has_lockfile=has_lockfile,
-        install_command=install_command,
-        build_command=build_command,
-        start_command=start_command,
+        install_command=answers["install_command"],
+        build_command=answers["build_command"],
+        start_command=answers["start_command"],
         output_dir=output_dir,
-        port=port,
+        port=answers["port"],
         confidence=confidence,
     )

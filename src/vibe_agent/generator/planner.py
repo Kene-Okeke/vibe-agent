@@ -218,6 +218,25 @@ def start_file_exists(manifest: Manifest, start_command: str) -> bool:
     # case 3: no .js word at all (e.g. "npm run start"), nothing to check
     return True
 
+def check_llm_answers(manifest: Manifest, llm_answers: dict, unknowns:list[str]) -> dict:
+   # 1. keep ONLY the fields we asked for, and make sure each one was answered
+   checked = {}
+   for name in unknowns:
+    if name not in llm_answers:
+        raise ValueError(f"LLM didn't answer: {name}")
+    checked[name] = llm_answers[name]
+
+    # 2. if the LLM gave a start command, it must be production-safe and real
+    start_command = checked.get("start_command")
+    if start_command:
+        if is_dev_command(start_command):
+            raise ValueError(f"LLM gave a dev command: {start_command}")
+        if not start_file_exists(manifest, start_command):
+            raise ValueError(f"LLM named a file that doesn't exist: {start_command}")
+
+    # 3. passed every check: safe to use
+    return checked
+
 def detect_start_command(manifest: Manifest, framework:str, package_manager: str | None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN

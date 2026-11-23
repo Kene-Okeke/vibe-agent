@@ -11,6 +11,8 @@ from dotenv import load_dotenv
 from vibe_agent.builder.builder import build, run
 from vibe_agent.inspector.inspector import inspect
 from vibe_agent.manifest import Manifest
+from vibe_agent.generator.planner import make_build_plan
+from vibe_agent.generator.render import render_dockerfile, render_dockerignore
 
 load_dotenv()
 API_URL = os.environ["API_URL"]
@@ -51,9 +53,39 @@ def keep_alive(worker_id: str, job_id: int) -> threading.Event:
 
 
 def generate(manifest: Manifest) -> dict:
-    # Okeke's generator (planner + render) plugs in here.
-    return {"dockerfile": None, "port": None, "build_args": {}, "runtime_env": {},
-            "warnings": [], "error": "Dockerfile generator not connected yet"}
+    # 1. decide how to build it (rules, plus the LLM if something was unknown)
+    try:
+        plan = make_build_plan(manifest)
+    except ValueError as error:
+        return {
+            "dockerfile": None,
+            "dockerignore": None,             
+            "port": None,
+            "build_args": {},
+            "runtime_env": {},
+            "warnings": [],
+            "error": str(error),
+        }
+
+       # 2. write the Dockerfile from that plan
+    dockerfile = render_dockerfile(plan)
+
+    # 3. tell the user if the LLM guessed anything
+    warnings = []
+    if plan.confidence != "high":
+        warnings.append("Some build settings were detected by AI. Check them if the deploy fails.")
+
+    # 4. hand everything to the builder, in the shape deploy() expects
+    return {
+        "dockerfile": dockerfile,
+        "dockerignore": render_dockerignore(),  
+        "port": plan.port,
+        "build_args": {},
+        "runtime_env": {},
+        "warnings": warnings,
+        "error": None,
+    }
+
 
 
 def claim(worker_id: str ) -> dict | None:
@@ -111,4 +143,5 @@ def main() -> None:
         stop_heartbeat.set()
         finish(worker_id, job["job_id"], success)
 
-main()
+if __name__ == "__main__":
+    main() 

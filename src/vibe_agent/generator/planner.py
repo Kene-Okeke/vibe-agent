@@ -2,7 +2,8 @@ import json
 import re
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.build_plan import BuildPlan
-from vibe_agent.generator.llm_fallback import build_llm_prompt, ask_llm
+from vibe_agent.llm import ask_llm
+from vibe_agent.generator.llm_fallback import build_llm_prompt
 
 FRAMEWORK_BY_PACKAGE = {
     "next": "next",

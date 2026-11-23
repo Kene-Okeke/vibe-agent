@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 import zipfile
 import time
-
+import os
 from vibe_agent.manifest import Manifest
 
 # --------------build----------------------------------------------------------
@@ -22,9 +22,9 @@ def find_build_folder( temporary_folder:  str, manifest: Manifest ) -> str:
 
 DOCKERIGNORE = "node_modules\ndist\n.git\n.env*\nDockerfile\n.dockerignore\n"
 def write_build_files( build_folder: str, dockerfile: str ) -> None:
-    with open(build_folder + "Dockerfile", 'w') as file:
+    with open(os.path.join(build_folder, "Dockerfile"),'w') as file:
         file.write(dockerfile) 
-    with open(build_folder + ".dockerignore", 'w') as file:
+    with open(os.path.join(build_folder, ".dockerignore"), 'w') as file:
         file.write(DOCKERIGNORE) 
 
 

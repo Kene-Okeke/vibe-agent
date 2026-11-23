@@ -20,6 +20,7 @@ WORKER_TOKEN = os.environ["WORKER_TOKEN"]
 
 POLL_SECONDS = 5
 HEARTBEAT_SECONDS = 20
+MAX_LOG_CHARACTERS = 10000
 
 
 def post(path: str, body: dict) -> tuple[int, dict | None]:
@@ -95,8 +96,11 @@ def claim(worker_id: str ) -> dict | None:
     if status != 204:
         print(worker_id, "claim failed:", status)
 
-def finish(worker_id: str, job_id: int, success: bool) -> None:
-    status, result = post("/internal/jobs/" + str(job_id)+"/finish",{"worker_id": worker_id, "success": success})
+def finish(worker_id: str, job_id: int, outcome: dict) -> None:
+    body = {
+        "worker_id":worker_id, "success" : outcome['success'], "url": outcome["url"], "logs": outcome["logs"][-MAX_LOG_CHARACTERS:]
+    }
+    status, result = post("/internal/jobs/" + str(job_id)+"/finish",body)
     print(worker_id, "finished job", job_id, "->", status, result)
 
 def deploy(job: dict ) -> bool:
@@ -106,28 +110,28 @@ def deploy(job: dict ) -> bool:
         manifests = inspect(path)
     except ValueError as error:
         print("inspect failed:", error) 
-        return False
+        return {"success": False, "url": None, "logs": "inspect failed: " + str(error)}
     manifest = manifests[0]
     print("app:", manifest.folder, manifest.app_type)
 
     plan = generate(manifest)
     if plan["error"] is not None:
         print("no Dockerfile:", plan["error"]) 
-        return False
+        return {"success": False, "url": None, "logs": "no Dockerfile: " + plan["error"]}
 
     tag = "deployment-" + str(job["deployment_id"])
     result = build(path, manifest, plan["dockerfile"], tag, plan["build_args"])
     if not result["ok"]:
         print(" build failed:", result["logs"].splitlines()[-1]) 
-        return False
+        return {"success": False, "url": None, "logs": result["logs"]}
 
     started = run(tag, plan["port"], plan["runtime_env"])
     if not started["ok"]:
         print(" run failed:", started["logs"].splitlines()[0])
-        return False
+        return {"success": False, "url": None, "logs": result["logs"] + started["logs"]}
 
     print("   live at", started["url"])
-    return True
+    return {"success": True,  "url": started["url"], "logs": result["logs"]}
 
 def main() -> None:
     worker_id = sys.argv[1]
@@ -139,9 +143,13 @@ def main() -> None:
             continue
         print(worker_id, "got job", job["job_id"], "for", job["source_path"])
         stop_heartbeat = keep_alive(worker_id, job["job_id"])
-        success = deploy(job)
+        try:
+            outcome = deploy(job)
+        except Exception as error:
+            outcome = {"success": False, "url": None, "logs": "worker error: " + str(error)}
+
         stop_heartbeat.set()
-        finish(worker_id, job["job_id"], success)
+        finish(worker_id, job["job_id"], outcome)
 
 if __name__ == "__main__":
-    main() 
+    main()

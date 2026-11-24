@@ -33,3 +33,9 @@ file_contents = {
 prompt = build_fix_prompt("build", trimmed, plan, files, file_contents)
 print("\n----- PROMPT -----\n")
 print(prompt)
+
+from vibe_agent.fixer.suggest import suggest_fix
+
+fix = suggest_fix(prompt)
+print("\n----- GEMINI'S FIX -----\n")
+print(fix.model_dump_json(indent=2))

@@ -5,10 +5,11 @@ import threading
 import time
 import urllib.error
 import urllib.request
+import shutil
 
 from dotenv import load_dotenv
 
-from vibe_agent.builder.builder import build, run
+from vibe_agent.builder.builder import build, run,unpack_upload
 from vibe_agent.inspector.inspector import inspect
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.planner import make_build_plan
@@ -103,7 +104,18 @@ def finish(worker_id: str, job_id: int, outcome: dict) -> None:
     status, result = post("/internal/jobs/" + str(job_id)+"/finish",body)
     print(worker_id, "finished job", job_id, "->", status, result)
 
-def deploy(job: dict ) -> bool:
+def first_line( text: str ) -> str:
+    lines = text.strip().splitlines()
+    if not lines:
+        return lines[0]
+
+def last_line( text: str ) -> str:
+    lines = text.strip().splitlines()
+    if not lines:
+        return lines[-1]
+
+
+def deploy(job: dict ) -> dict:
     path = job["source_path"]
 
     try: 
@@ -119,19 +131,24 @@ def deploy(job: dict ) -> bool:
         print("no Dockerfile:", plan["error"]) 
         return {"success": False, "url": None, "logs": "no Dockerfile: " + plan["error"]}
 
-    tag = "deployment-" + str(job["deployment_id"])
-    result = build(path, manifest, plan["dockerfile"], tag, plan["build_args"])
-    if not result["ok"]:
-        print(" build failed:", result["logs"].splitlines()[-1]) 
-        return {"success": False, "url": None, "logs": result["logs"]}
+    unpacked = unpack_upload(path)
+    try:
 
-    started = run(tag, plan["port"], plan["runtime_env"])
-    if not started["ok"]:
-        print(" run failed:", started["logs"].splitlines()[0])
-        return {"success": False, "url": None, "logs": result["logs"] + started["logs"]}
+        tag = "deployment-" + str(job["deployment_id"])
+        result = build(unpacked, manifest, plan["dockerfile"], plan["dockerignore"], tag, plan["build_args"])
+        if not result["ok"]:
+            print(" build failed:", last_line(result["logs"]))) 
+            return {"success": False, "url": None, "logs": result["logs"]}
 
-    print("   live at", started["url"])
-    return {"success": True,  "url": started["url"], "logs": result["logs"]}
+        started = run(tag, plan["port"], plan["runtime_env"])
+        if not started["ok"]:
+            print(" run failed:", first_line(result["logs"])))
+            return {"success": False, "url": None, "logs": result["logs"] + started["logs"]}
+
+        print("   live at", started["url"])
+        return {"success": True,  "url": started["url"], "logs": result["logs"]}
+    finally:
+        shutil.rmtree(unpacked)
 
 def main() -> None:
     worker_id = sys.argv[1]

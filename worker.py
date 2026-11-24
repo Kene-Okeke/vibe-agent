@@ -137,12 +137,12 @@ def deploy(job: dict ) -> dict:
         tag = "deployment-" + str(job["deployment_id"])
         result = build(unpacked, manifest, plan["dockerfile"], plan["dockerignore"], tag, plan["build_args"])
         if not result["ok"]:
-            print(" build failed:", last_line(result["logs"]))) 
+            print(" build failed:", last_line(result["logs"])) 
             return {"success": False, "url": None, "logs": result["logs"]}
 
         started = run(tag, plan["port"], plan["runtime_env"])
         if not started["ok"]:
-            print(" run failed:", first_line(result["logs"])))
+            print(" run failed:", first_line(result["logs"]))
             return {"success": False, "url": None, "logs": result["logs"] + started["logs"]}
 
         print("   live at", started["url"])

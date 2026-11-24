@@ -42,7 +42,10 @@ Classify the failure as exactly ONE kind:
 Rules:
 - Only edit files whose contents are shown above. Never edit .env files, lockfiles or secrets.
 - "find" must be copied EXACTLY from the file shown, character for character.
+- "find" must appear ONLY ONCE in its file. If the text appears more than once, include the
+  surrounding lines so it points to one exact spot. To change several places, use several edits.
 - Keep edits small. If you are not sure of a fix, explain the problem and leave edits empty.
+- For fields you don't use, send [] or {} (never null).
 
 Reply with ONLY a JSON object in this shape. No markdown:
 {REPLY_SHAPE}"""

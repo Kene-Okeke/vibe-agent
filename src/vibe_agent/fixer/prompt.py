@@ -45,7 +45,7 @@ Rules:
 - "find" must appear ONLY ONCE in its file. If the text appears more than once, include the
   surrounding lines so it points to one exact spot. To change several places, use several edits.
 - Keep edits small. If you are not sure of a fix, explain the problem and leave edits empty.
-- For fields you don't use, send [] or {} (never null).
+- For fields you don't use, send [] or {{}} (never null).
 
 Reply with ONLY a JSON object in this shape. No markdown:
 {REPLY_SHAPE}"""

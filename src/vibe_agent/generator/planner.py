@@ -1,5 +1,6 @@
 import json
 import re
+import os 
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.build_plan import BuildPlan
 from vibe_agent.llm import ask_llm
@@ -119,7 +120,14 @@ def read_requirements_txt(manifest: Manifest) ->list[str]:
             names.append(match.group(0).lower())
     return names
 
-
+def workspace_app_path(manifest: Manifest) -> str | None:
+    # normal app → None; monorepo app → its path from the workspace root, e.g. "apps/web"
+    if manifest.workspace_root is None:
+        return None
+    app_path = os.path.relpath(manifest.folder, manifest.workspace_root)
+    if app_path == ".":
+        return None          # the app IS the root, so treat it like a normal app
+    return app_path
 
 def detect_framework(manifest: Manifest) -> str | None:
     #framework: Literal["next", "vite", "node-server", "fastapi", "static"]
@@ -178,33 +186,34 @@ def pick_install_command(package_manager: str | None, has_lockfile: bool) -> str
     return INSTALL_WITHOUT_LOCKFILE.get(package_manager, UNKNOWN)
 
 
-def detect_build_command(manifest: Manifest, 
-framework: str, package_manager: str|None) -> str | None:
+def detect_build_command(manifest: Manifest, framework: str, package_manager: str | None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN
-    
-    if framework in ["static" , "fastapi"]:
+
+    if framework in ["static", "fastapi"]:
         return None
 
-    # 3. get the scripts from package.json - using the read_package_json function
-    scripts = read_package_json(manifest).get("scripts",{})
+    scripts = read_package_json(manifest).get("scripts", {})
+    app_path = workspace_app_path(manifest)
 
-     # 4. if it has a "build" script: run it by name with the right package manager
+    # monorepo app: build THIS workspace, while standing at the workspace root
+    if app_path is not None:
+        if package_manager != "npm":
+            return UNKNOWN          # v1: only npm workspaces; the LLM fallback can try the rest
+        if "build" in scripts:
+            return f"npm run build -w {app_path}"
+        if framework in ["next", "vite"]:
+            return f"npm exec -w {app_path} -- {framework} build"
+        return None
+
+    # normal app (unchanged from before)
     if "build" in scripts:
-            return f"{RUN_SCRIPT.get(package_manager,'npm run')} build"
+        return f"{RUN_SCRIPT.get(package_manager, 'npm run')} build"
 
     if framework in ["next", "vite"]:
         return f"{EXEC_TOOL.get(package_manager, 'npx')} {framework} build"
 
-    # 6. anything else (node-server with no build script): no build step
     return None
-
-def is_dev_command(command: str) -> bool:
-    for word in DEV_WORDS:
-        if word in command:
-            return True
-    return False
-
 # this check is for the llm , start command is something that could be wrong and we have to check 
 # if the js file exists in the file path - thisb lets us know if the llm really got the strat command to prevent crashes 
 
@@ -299,23 +308,28 @@ def detect_port(framework: str) -> int | str:
     # look up the framework's port; UNKNOWN if it's not in the table
     return PORT_BY_FRAMEWORK.get(framework, UNKNOWN)
 
-def detect_output_dir(manifest: Manifest, framework:str) -> str|None:
+def detect_output_dir(manifest: Manifest, framework: str) -> str | None:
     if framework == "static":
         return "."
 
     if framework != "vite":
         return None
-    
-    # Vite: look for a custom outDir in its config
+
+    # Vite: a custom outDir from its config, otherwise "dist"
+    out = "dist"
     for name in ["vite.config.ts", "vite.config.js", "vite.config.mjs"]:
         config = manifest.marker_files.get(name)
         if config:
             match = re.search(r"outDir\s*:\s*['\"]([^'\"]+)['\"]", config)
             if match:
-                return match.group(1)
-    
-    # no custom outDir found: Vite's default
-    return "dist"
+                out = match.group(1)
+                break
+
+    # monorepo app: the output sits INSIDE the app's folder
+    app_path = workspace_app_path(manifest)
+    if app_path is not None:
+        return f"{app_path}/{out}"
+    return out
 
 
 

@@ -14,6 +14,8 @@ from vibe_agent.inspector.inspector import inspect
 from vibe_agent.manifest import Manifest
 from vibe_agent.generator.planner import make_build_plan
 from vibe_agent.generator.render import render_dockerfile, render_dockerignore
+from vibe_agent.fixer.loop import fix_and_rebuild
+from vibe_agent.builder.builder import find_build_folder
 
 load_dotenv()
 API_URL = os.environ["API_URL"]

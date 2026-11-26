@@ -86,18 +86,19 @@ CMD {cmd}
 
 DOCKERIGNORE = [
     # secrets
-    ".env", ".env.*", "!.env.example",
-    "*.pem", "*.key", "*.p12", "*.pfx", "id_rsa*",
+    "**/.env", "**/.env.*", "!**/.env.example",
+    "**/*.pem", "**/*.key", "**/*.p12", "**/*.pfx", "**/id_rsa*",
     # databases and dumps
-    "*.sql", "*.sqlite", "*.sqlite3", "*.db", "*.dump",
+    "**/*.sql", "**/*.sqlite", "**/*.sqlite3", "**/*.db", "**/*.dump",
     # installed packages (reinstalled inside the image)
-    "node_modules", ".venv", "venv", "vendor", "__pycache__", "*.pyc",
+    "**/node_modules", "**/.venv", "**/venv", "**/__pycache__", "**/*.pyc",
     # build output (rebuilt inside the image)
-    ".next",
+    "**/.next",
     # junk
-    ".git", ".DS_Store", "*.log", ".vscode", ".idea", "coverage",
+    "**/.git", "**/.DS_Store", "**/*.log", "**/.vscode", "**/.idea", "**/coverage",
+    # the build files themselves
+    "Dockerfile", ".dockerignore",
 ]
-
 
 
 RENDERERS = {

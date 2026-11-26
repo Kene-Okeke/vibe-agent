@@ -20,3 +20,17 @@ print("build_command:", plan.build_command)
 print("output_dir:   ", plan.output_dir)
 print()
 print(render_dockerfile(plan))
+
+api_app = Manifest(
+    folder="apps/api",
+    workspace_root=".",
+    markers=["package.json"],
+    marker_files={
+        "package.json": '{"name": "api", "scripts": {"start": "node server.js"}, "dependencies": {"express": "^4.19.0"}}'
+    },
+    files=["package.json", "server.js"],
+    lockfile="package-lock.json",
+    app_type="node",
+)
+api_plan = make_build_plan(api_app)
+print("\nExpress in monorepo → start:", api_plan.start_command)

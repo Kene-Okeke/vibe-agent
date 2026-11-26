@@ -242,13 +242,13 @@ def start_file_exists(manifest: Manifest, start_command: str) -> bool:
     # case 3: no .js word at all (e.g. "npm run start"), nothing to check
     return True
 
-def check_llm_answers(manifest: Manifest, llm_answers: dict, unknowns:list[str]) -> dict:
-   # 1. keep ONLY the fields we asked for, and make sure each one was answered
-   checked = {}
-   for name in unknowns:
-    if name not in llm_answers:
-        raise ValueError(f"LLM didn't answer: {name}")
-    checked[name] = llm_answers[name]
+def check_llm_answers(manifest: Manifest, llm_answers: dict, unknowns: list[str]) -> dict:
+    # 1. keep ONLY the fields we asked for, and make sure each one was answered
+    checked = {}
+    for name in unknowns:
+        if name not in llm_answers:
+            raise ValueError(f"LLM didn't answer: {name}")
+        checked[name] = llm_answers[name]
 
     # 2. if the LLM gave a start command, it must be production-safe and real
     start_command = checked.get("start_command")
@@ -275,28 +275,41 @@ def fill_unknowns_with_llm(manifest: Manifest,answers:dict, unknowns:list[str]) 
        # the rules' answers, with the gaps filled in
     return answers | checked
 
+def is_dev_command(command: str) -> bool:
+    for word in DEV_WORDS:
+        if word in command:
+            return True
+    return False
 
-
-def detect_start_command(manifest: Manifest, framework:str, package_manager: str | None) -> str | None:
+def detect_start_command(manifest: Manifest, framework: str, package_manager: str | None) -> str | None:
     if framework == UNKNOWN:
         return UNKNOWN
 
     if framework in ["vite", "static"]:
         return None
-    
+
     scripts = read_package_json(manifest).get("scripts", {})
+    app_path = workspace_app_path(manifest)
+
+    # monorepo app: start THIS workspace, while standing at the workspace root
+    if app_path is not None and framework in ["next", "node-server"]:
+        if package_manager != "npm":
+            return UNKNOWN          # v1: only npm workspaces; the LLM fallback can try the rest
+        if "start" in scripts and not is_dev_command(scripts["start"]):
+            return f"npm run start -w {app_path}"
+        return UNKNOWN
 
     if framework == "next":
         if "start" in scripts:
-            return f"{RUN_SCRIPT.get(package_manager,'npm run')} start"
-        return f"{EXEC_TOOL.get(package_manager,'npx')} next start"
-     
+            return f"{RUN_SCRIPT.get(package_manager, 'npm run')} start"
+        return f"{EXEC_TOOL.get(package_manager, 'npx')} next start"
+
     if framework == "fastapi":
         for path, module in FASTAPI_MODULES.items():
             if path in manifest.files:
                 return f"uvicorn {module}:app --host 0.0.0.0 --port 8000"
         return UNKNOWN
-    
+
     if framework == "flask":
         for path, module in FLASK_MODULES.items():
             if path in manifest.files:
@@ -306,7 +319,7 @@ def detect_start_command(manifest: Manifest, framework:str, package_manager: str
     if framework == "node-server":
         if "start" in scripts and not is_dev_command(scripts["start"]):
             return f"{RUN_SCRIPT.get(package_manager, 'npm run')} start"
-        
+
         # ↓ only reached if the line above did NOT return, so it works like "else"
         dev_script = scripts.get("dev", "")
         for word in dev_script.split():
@@ -318,7 +331,7 @@ def detect_start_command(manifest: Manifest, framework:str, package_manager: str
             if name in manifest.files:
                 return f"node {name}"
 
-         # ↓ only reached if none of the common files exist
+        # ↓ only reached if none of the common files exist
         return UNKNOWN
 
     return UNKNOWN

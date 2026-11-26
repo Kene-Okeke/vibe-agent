@@ -106,49 +106,51 @@ def finish(worker_id: str, job_id: int, outcome: dict) -> None:
     status, result = post("/internal/jobs/" + str(job_id)+"/finish",body)
     print(worker_id, "finished job", job_id, "->", status, result)
 
-def first_line( text: str ) -> str:
+def first_line(text: str) -> str:
     lines = text.strip().splitlines()
     if not lines:
-        return lines[0]
+        return "(no output)"
+    return lines[0]
 
-def last_line( text: str ) -> str:
+
+def last_line(text: str) -> str:
     lines = text.strip().splitlines()
     if not lines:
-        return lines[-1]
+        return "(no output)"
+    return lines[-1]
 
 
-def deploy(job: dict ) -> dict:
+def deploy(job: dict) -> dict:
     path = job["source_path"]
 
-    try: 
+    try:
         manifests = inspect(path)
     except ValueError as error:
-        print("inspect failed:", error) 
+        print("inspect failed:", error)
         return {"success": False, "url": None, "logs": "inspect failed: " + str(error)}
     manifest = manifests[0]
     print("app:", manifest.folder, manifest.app_type)
 
     plan = generate(manifest)
     if plan["error"] is not None:
-        print("no Dockerfile:", plan["error"]) 
+        print("no Dockerfile:", plan["error"])
         return {"success": False, "url": None, "logs": "no Dockerfile: " + plan["error"]}
 
     unpacked = unpack_upload(path)
     try:
-
         tag = "deployment-" + str(job["deployment_id"])
         result = build(unpacked, manifest, plan["dockerfile"], plan["dockerignore"], tag, plan["build_args"])
         if not result["ok"]:
-            print(" build failed:", last_line(result["logs"])) 
+            print("   build failed:", last_line(result["logs"]))
             return {"success": False, "url": None, "logs": result["logs"]}
 
-        started = run(tag, plan["port"], plan["runtime_env"])
-        if not started["ok"]:
-            print(" run failed:", first_line(result["logs"]))
-            return {"success": False, "url": None, "logs": result["logs"] + started["logs"]}
+        run_result = run(tag, plan["port"], plan["runtime_env"])
+        if not run_result["ok"]:
+            print("   run failed:", first_line(run_result["logs"]))
+            return {"success": False, "url": None, "logs": result["logs"] + run_result["logs"]}
 
-        print("   live at", started["url"])
-        return {"success": True,  "url": started["url"], "logs": result["logs"]}
+        print("   live at", run_result["url"])
+        return {"success": True, "url": run_result["url"], "logs": result["logs"]}
     finally:
         shutil.rmtree(unpacked)
 

@@ -78,7 +78,7 @@ def container_logs(container_id: str ) -> str:
  
 def find_address(container_id: str, port: int ) -> str:
     result = subprocess.run(["docker", "port", container_id, str(port)], capture_output=True, text=True)
-    lines = result.stdout.splitlines()[0]
+    lines = result.stdout.splitlines()
     if not lines:
         return None
     return lines[0]

@@ -27,6 +27,8 @@ def read_files(folder: str, paths: list[str]) -> dict[str, str]:
     return contents
 
 def fix_and_rebuild(folder: str, plan: BuildPlan, files: list[str], tag: str, approve) -> dict:
+    last_log = ""      # the most recent trimmed build log, so every failure can carry it
+
     for attempt in range(1, MAX_ATTEMPTS + 1):
         print(f"\n--- attempt {attempt} ---")
 
@@ -38,6 +40,7 @@ def fix_and_rebuild(folder: str, plan: BuildPlan, files: list[str], tag: str, ap
 
         # 2. it failed: ask the LLM what went wrong, and check its answer
         trimmed = trim_log(result["logs"])
+        last_log = trimmed
         picked = pick_relevant_files(trimmed, files)
         contents = read_files(folder, picked)
         prompt = build_fix_prompt("build", trimmed, plan, files, contents)
@@ -51,18 +54,16 @@ def fix_and_rebuild(folder: str, plan: BuildPlan, files: list[str], tag: str, ap
 
         # 3. act on the kind of problem
         if fix.kind == "plan":
-            # our own settings were wrong: fix the plan automatically
             try:
                 plan = apply_plan_changes(plan, fix)
             except ValueError as error:
-                return {"ok": False, "reason": f"Bad plan fix: {error}", "fix": fix}
+                return {"ok": False, "reason": f"Bad plan fix: {error}", "fix": fix, "log": trimmed}
         elif fix.kind == "code" and fix.edits:
-            # the user's code: only with their OK
             if not approve(fix):
-                return {"ok": False, "reason": "User declined the fix", "fix": fix}
+                return {"ok": False, "reason": f"Code fix needs your approval: {fix.explanation}",
+                        "fix": fix, "log": trimmed}
             apply_code_edits(folder, fix)
         else:
-            # config / runtime / no edits: we can't fix this ourselves
-            return {"ok": False, "reason": "Needs your action", "fix": fix}
+            return {"ok": False, "reason": fix.explanation, "fix": fix, "log": trimmed}
 
-    return {"ok": False, "reason": f"Still failing after {MAX_ATTEMPTS} attempts"}
+    return {"ok": False, "reason": f"Still failing after {MAX_ATTEMPTS} attempts", "log": last_log}

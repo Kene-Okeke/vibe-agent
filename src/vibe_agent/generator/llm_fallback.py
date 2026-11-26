@@ -3,7 +3,7 @@ from vibe_agent.manifest import Manifest
 
 # what each field means, so the LLM knows exactly what we want back
 FIELD_HELP = {
-    "framework": 'one of "next", "vite", "node-server", "fastapi", "static"',
+    "framework": 'one of "next", "vite", "node-server", "fastapi", "flask", "static"',
     "install_command": "the production install command, e.g. npm ci",
     "build_command": "the build command, or null if there is none",
     "start_command": "the PRODUCTION start command (never nodemon, --watch, --reload or next dev), or null for vite/static",

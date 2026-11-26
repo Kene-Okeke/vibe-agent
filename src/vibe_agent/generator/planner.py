@@ -67,6 +67,15 @@ FASTAPI_MODULES = {
     "src/main.py": "src.main",
     "app.py": "app",
 }
+
+# where Flask apps usually live → the module gunicorn should load
+FLASK_MODULES = {
+    "app.py": "app",
+    "wsgi.py": "wsgi",
+    "main.py": "main",
+    "app/__init__.py": "app",
+}
+
 # words that mean "development mode": never used in production
 DEV_WORDS = ["nodemon", "--watch", "--reload", "next dev"]
 
@@ -80,6 +89,7 @@ PORT_BY_FRAMEWORK = {
     "fastapi": 8000,       # must match --port 8000 in the uvicorn command
     "vite": 80,            # Caddy serves the built files on port 80
     "static": 80,          # same: Caddy
+    "flask": 5000,         
 }
 
 DEFAULT_RUNTIME = {
@@ -144,6 +154,9 @@ def detect_framework(manifest: Manifest) -> str | None:
     requirements = read_requirements_txt(manifest)
     if "fastapi" in requirements:
         return "fastapi"
+
+    if "flask" in requirements:          # ← add
+        return "flask"
     
     if manifest.app_type == "static":
         return "static"
@@ -190,7 +203,7 @@ def detect_build_command(manifest: Manifest, framework: str, package_manager: st
     if framework == UNKNOWN:
         return UNKNOWN
 
-    if framework in ["static", "fastapi"]:
+    if framework in ["static", "fastapi", "flask"]:
         return None
 
     scripts = read_package_json(manifest).get("scripts", {})
@@ -283,6 +296,12 @@ def detect_start_command(manifest: Manifest, framework:str, package_manager: str
             if path in manifest.files:
                 return f"uvicorn {module}:app --host 0.0.0.0 --port 8000"
         return UNKNOWN
+    
+    if framework == "flask":
+        for path, module in FLASK_MODULES.items():
+            if path in manifest.files:
+                return f"gunicorn {module}:app --bind 0.0.0.0:5000"
+        return UNKNOWN
 
     if framework == "node-server":
         if "start" in scripts and not is_dev_command(scripts["start"]):
@@ -347,7 +366,7 @@ def detect_runtime_version(manifest: Manifest, framework: str, package_manager: 
         return DEFAULT_RUNTIME["bun"]
 
     # Python: .python-version if the project has one, otherwise the default
-    if framework == "fastapi":
+    if framework in ["fastapi", "flask"]:
         pinned = manifest.marker_files.get(".python-version")
         if pinned:
             return pinned.strip()

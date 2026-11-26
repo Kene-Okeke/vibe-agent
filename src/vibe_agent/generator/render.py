@@ -71,6 +71,14 @@ def render_fastapi(plan: BuildPlan) -> str:
             "RUN pip install --no-cache-dir poetry\n"
             "RUN poetry config virtualenvs.create false\n"
         )
+    
+        # Flask needs gunicorn to run in production; many apps don't list it
+    extra_line = ""
+    if plan.framework == "flask":
+        if plan.package_manager == "uv":
+            extra_line = "RUN uv pip install gunicorn\n"
+        else:
+            extra_line = "RUN pip install --no-cache-dir gunicorn\n"
     # "uvicorn main:app --host 0.0.0.0 --port 8000" -> ["uvicorn", "main:app", ...] 
     # this is what the start command looks like from the planner 
     cmd = json.dumps(plan.start_command.split())
@@ -79,7 +87,7 @@ def render_fastapi(plan: BuildPlan) -> str:
 WORKDIR /app
 COPY . .
 {setup_line}RUN {plan.install_command}
-ENV PYTHONUNBUFFERED=1
+{extra_line}ENV PYTHONUNBUFFERED=1
 EXPOSE {plan.port}
 CMD {cmd}
 """
@@ -100,13 +108,13 @@ DOCKERIGNORE = [
     "Dockerfile", ".dockerignore",
 ]
 
-
 RENDERERS = {
     "static": render_static,
     "vite": render_vite,
     "next": render_node,
     "node-server": render_node,
     "fastapi": render_fastapi,
+    "flask": render_fastapi,  
 }
 
 def render_dockerfile(plan: BuildPlan) -> str:

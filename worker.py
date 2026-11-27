@@ -98,12 +98,22 @@ def claim(worker_id: str ) -> dict | None:
         return job
     if status != 204:
         print(worker_id, "claim failed:", status)
-
 def finish(worker_id: str, job_id: int, outcome: dict) -> None:
     body = {
-        "worker_id":worker_id, "success" : outcome['success'], "url": outcome["url"], "logs": outcome["logs"][-MAX_LOG_CHARACTERS:]
+        "worker_id": worker_id,
+        "success": outcome["success"],
+        "url": outcome["url"],
+        "logs": outcome["logs"][-MAX_LOG_CHARACTERS:],
+        "services": [],
     }
-    status, result = post("/internal/jobs/" + str(job_id)+"/finish",body)
+    for service in outcome["services"]:
+        body["services"].append({
+            "folder": service["folder"],
+            "success": service["success"],
+            "url": service["url"],
+            "logs": service["logs"][-MAX_LOG_CHARACTERS:],
+        })
+    status, result = post("/internal/jobs/" + str(job_id) + "/finish", body)
     print(worker_id, "finished job", job_id, "->", status, result)
 
 def first_line(text: str) -> str:
@@ -120,57 +130,74 @@ def last_line(text: str) -> str:
     return lines[-1]
 
 
-def deploy(job: dict) -> dict:
-    path = job["source_path"]
+def deploy_one_app(unpacked: str, manifest: Manifest, tag: str) -> dict:
+    plan = generate(manifest)
+    if plan["error"] is not None:
+        print("   no Dockerfile:", plan["error"])
+        return {"folder": manifest.folder, "success": False, "url": None, "logs": "no Dockerfile: " + plan["error"]}
 
+    result = build(unpacked, manifest, plan["dockerfile"], plan["dockerignore"], tag, plan["build_args"])
+    if not result["ok"]:
+        print("   build failed:", last_line(result["logs"]))
+        return {"folder": manifest.folder, "success": False, "url": None, "logs": result["logs"]}
+
+    run_result = run(tag, plan["port"], plan["runtime_env"])
+    if not run_result["ok"]:
+        print("   run failed:", first_line(run_result["logs"]))
+        return {"folder": manifest.folder, "success": False, "url": None, "logs": result["logs"] + run_result["logs"]}
+
+    print("   live at", run_result["url"])
+    return {"folder": manifest.folder, "success": True, "url": run_result["url"], "logs": result["logs"]}
+
+
+def deploy_job(job: dict) -> dict:
+    path = job["source_path"]
     try:
         manifests = inspect(path)
     except ValueError as error:
-        print("inspect failed:", error)
-        return {"success": False, "url": None, "logs": "inspect failed: " + str(error)}
-    manifest = manifests[0]
-    print("app:", manifest.folder, manifest.app_type)
+        print("   inspect failed:", error)
+        return {"success": False, "url": None, "logs": "inspect failed: " + str(error), "services": []}
 
-    plan = generate(manifest)
-    if plan["error"] is not None:
-        print("no Dockerfile:", plan["error"])
-        return {"success": False, "url": None, "logs": "no Dockerfile: " + plan["error"]}
-
+    services = []
     unpacked = unpack_upload(path)
     try:
-        tag = "deployment-" + str(job["deployment_id"])
-        result = build(unpacked, manifest, plan["dockerfile"], plan["dockerignore"], tag, plan["build_args"])
-        if not result["ok"]:
-            print("   build failed:", last_line(result["logs"]))
-            return {"success": False, "url": None, "logs": result["logs"]}
-
-        run_result = run(tag, plan["port"], plan["runtime_env"])
-        if not run_result["ok"]:
-            print("   run failed:", first_line(run_result["logs"]))
-            return {"success": False, "url": None, "logs": result["logs"] + run_result["logs"]}
-
-        print("   live at", run_result["url"])
-        return {"success": True, "url": run_result["url"], "logs": result["logs"]}
+        for number, manifest in enumerate(manifests, start=1):
+            print("   app", number, "of", len(manifests), ":", manifest.folder, manifest.app_type)
+            tag = "deployment-" + str(job["deployment_id"]) + "-" + str(number)
+            services.append(deploy_one_app(unpacked, manifest, tag))
     finally:
         shutil.rmtree(unpacked)
+
+    success = True
+    url = None
+    logs = ""
+    for service in services:
+        if not service["success"]:
+            success = False
+        if url is None:
+            url = service["url"]
+        logs = logs + "== " + service["folder"] + " ==\n" + service["logs"] + "\n"
+    return {"success": success, "url": url, "logs": logs, "services": services}
+
 
 def main() -> None:
     worker_id = sys.argv[1]
     print(worker_id, "started")
     while True:
-        job= claim(worker_id)
+        job = claim(worker_id)
         if job is None:
             time.sleep(POLL_SECONDS)
             continue
         print(worker_id, "got job", job["job_id"], "for", job["source_path"])
         stop_heartbeat = keep_alive(worker_id, job["job_id"])
         try:
-            outcome = deploy(job)
+            outcome = deploy_job(job)
         except Exception as error:
-            outcome = {"success": False, "url": None, "logs": "worker error: " + str(error)}
+            outcome = {"success": False, "url": None, "logs": "worker error: " + str(error), "services": []}
 
         stop_heartbeat.set()
         finish(worker_id, job["job_id"], outcome)
+
 
 if __name__ == "__main__":
     main()
